@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+redis
+python-dotenv
+sqlalchemy
+psycopg2-binary
+cassandra-driver
