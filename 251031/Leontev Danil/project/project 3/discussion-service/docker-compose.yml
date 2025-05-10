@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  discussion-service:
+    build: .
+    ports:
+      - "24112:24112"
+    environment:
+      - CASSANDRA_HOSTS=cassandra
+      - CASSANDRA_PORT=9042
+      - CASSANDRA_KEYSPACE=discussion
+      - CASSANDRA_USERNAME=cassandra
+      - CASSANDRA_PASSWORD=cassandra
+    depends_on:
+      cassandra:
+        condition: service_started
+    volumes:
+      - .:/app
+    restart: unless-stopped
+
+  cassandra:
+    image: cassandra:4.1
+    ports:
+      - "9042:9042"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    environment:
+      - CASSANDRA_CLUSTER_NAME=DiscussionCluster
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_RACK=rack1
+
+volumes:
+  cassandra_data: 

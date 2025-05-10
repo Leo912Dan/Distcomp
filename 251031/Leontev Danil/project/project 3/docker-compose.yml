@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=distcomp
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "24111:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: postgres -c 'max_connections=1000'
+    restart: unless-stopped
+  app:
+    build: .
+    ports:
+      - "24110:24110"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/distcomp
+      - CASSANDRA_HOSTS=cassandra
+      - CASSANDRA_PORT=9042
+      - CASSANDRA_KEYSPACE=discussion
+    depends_on:
+      db:
+        condition: service_healthy
+      cassandra:
+        condition: service_started
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 24110
+
+  # Сервис Cassandra - распределенная NoSQL база данных
+  # Используется для хранения сообщений и обеспечения высокой производительности
+  cassandra:
+    image: cassandra:4.1  # Используем стабильную версию Cassandra
+    ports:
+      - "9042:9042"  # Стандартный порт для CQL (Cassandra Query Language)
+    volumes:
+      - cassandra_data:/var/lib/cassandra  # Том для хранения данных
+    environment:
+      - CASSANDRA_CLUSTER_NAME=DiscussionCluster  # Имя кластера
+      - CASSANDRA_DC=datacenter1  # Имя дата-центра
+      - CASSANDRA_RACK=rack1  # Имя стойки
+    healthcheck:  # Проверка здоровья сервиса
+      test: ["CMD", "cqlsh", "-u cassandra", "-p cassandra", "-e 'describe cluster'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Сервис для инициализации базы данных
+  # Создает необходимые таблицы и настройки
+  cassandra-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m discussion_service.init_cassandra
+    environment:
+      - CASSANDRA_HOST=cassandra
+      - CASSANDRA_PORT=9042
+      - CASSANDRA_USER=cassandra
+      - CASSANDRA_PASSWORD=cassandra
+      - CASSANDRA_KEYSPACE=discussion
+    depends_on:
+      cassandra:
+        condition: service_healthy  # Ждем пока Cassandra будет готова
+
+volumes:
+  postgres_data:
+  cassandra_data:  # Именованный том для хранения данных Cassandra
